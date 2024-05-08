@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+        "outDir": "build/js",
+        "skipLibCheck": true,
+        "target": "ES6",
+        "moduleResolution": "Node",
+        "module": "ES6",
+        "allowSyntheticDefaultImports": true,
+        "esModuleInterop": true
+    },
+    "include": ["src/**/*.ts"],
+    "ts-node": {
+        "experimentalResolver": true
+    },
+    "tsc-alias": {
+        "resolveFullPaths": true,
+        "verbose": false
+    }
+}
