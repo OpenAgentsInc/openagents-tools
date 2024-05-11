@@ -26,11 +26,7 @@
         "mustache": "^4.2.0",
         "openagents-grpc-proto": "https://github.com/OpenAgentsInc/openagents-grpc-proto/releases/download/v0.8.2/openagents_grpc_proto-JAVASCRIPT.tgz",
         "openai": "^4.42.0",
-        "ts-protoc-gen": "^0.15.0",
-        "uuidv4": "^6.2.13",
-        "winston": "^3.13.0",
-        "winston-transport": "^4.7.0",
-        "ws": "^8.16.0"
+        "ts-protoc-gen": "^0.15.0"
     },
     "devDependencies": {
         "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
