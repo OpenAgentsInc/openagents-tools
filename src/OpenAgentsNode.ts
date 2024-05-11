@@ -71,6 +71,9 @@ export default class OpenAgentsNode {
                 host: `${this.poolAddress}:${this.poolPort}`,
                 channelOptions: clientOptions,
                 channelCredentials: channelCredentials,
+                meta: {
+                    authorization: process.env.NODE_TOKEN || undefined,
+                },
             });
 
             this.getLogger().info("Connecting to pool at ", this.poolAddress, ":", this.poolPort);
@@ -109,27 +112,9 @@ export default class OpenAgentsNode {
                 };
             };
 
-            const nodeToken = process.env.NODE_TOKEN || undefined;
-
-            const options: RpcOptions = {
-                meta: {
-                    authorization: nodeToken,
-                },
-            };
-
-            // instrument each function to pass RpcOptions as the last argument
-            const parentPrototype = Object.getPrototypeOf(this.client);
-            for (const key of Object.getOwnPropertyNames(parentPrototype)) {
-                const value = this.client[key];
-                if (typeof value === "function") {
-                    if (key === "constructor" || key === "ready" || key === "r" || key === "rS") continue;
-                    const originalContext = this.client;
-                    this.client[key] = async (...args: any[]) => {
-                        args.push(options);
-                        return value.apply(originalContext, args);
-                    };
-                }
-            }
+ 
+          
+         
         }
         return this.client;
     }
