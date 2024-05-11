@@ -1,7 +1,4 @@
-import winston, { error, info } from "winston";
-import Transport from "winston-transport";
 import goodbye from "graceful-goodbye";
-import JobRunner from "./JobRunner";
 enum LogLevel {
     error = "error",
     warn = "warn",
@@ -9,7 +6,7 @@ enum LogLevel {
     debug = "debug",
     fine = "fine",
     finer = "finer",
-    finest = "finest"
+    finest = "finest",
 }
 
 type OpenObserveOptions = {
@@ -33,6 +30,8 @@ type OpenObserveOptions = {
 class OpenObserveLogger {
     private opts: OpenObserveOptions;
     private buffer: any[] = [];
+    private flusherLoop: any;
+    private closed: boolean = false;
 
     constructor(opts: OpenObserveOptions) {
         this.opts = opts;
@@ -43,25 +42,27 @@ class OpenObserveLogger {
     }
 
     async close() {
+        this.closed = true;
+        if (this.flusherLoop) clearTimeout(this.flusherLoop);
         const buffer = this.buffer;
         this.buffer = [];
         await this.flush(buffer);
     }
 
     private async flushLoop() {
+        if (this.closed) return;
         const buffer = this.buffer;
         this.buffer = [];
         await this.flush(buffer);
-        setTimeout(() => this.flushLoop(), this.opts.flushInterval || 5000);
+        this.flusherLoop = setTimeout(() => this.flushLoop(), this.opts.flushInterval || 5000);
     }
 
-    log(info: any, callback: any) {
-        const message = info.message;
+    async log(level: string, message: string, timestamp: number) {
         const kv = typeof message == "object" ? JSON.parse(JSON.stringify(message)) : {};
         const meta = this.opts.meta ? this.opts.meta : {};
         const logEntry = {
-            _timestamp: info.timestamp,
-            level: info.level,
+            _timestamp: timestamp,
+            level: level,
             log: typeof message === "string" ? message : kv.log ? kv.log : JSON.stringify(message),
             ...kv,
             ...meta,
@@ -72,13 +73,9 @@ class OpenObserveLogger {
             this.buffer = [];
             this.flush(buffer);
         }
-        callback();
     }
 
-  
-
     async flush(buffer: any[]) {
-        if (!buffer) buffer = this.buffer;
         if (buffer.length == 0) return;
 
         let basicAuth = this.opts.auth;
@@ -103,6 +100,7 @@ class OpenObserveLogger {
         });
     }
 }
+
 export default class Logger {
     name: string;
     version: string;
@@ -123,9 +121,9 @@ export default class Logger {
         this.name = name || "main";
         this.runnerLogger = runnerLogger;
         this.version = version;
-        const logLevelName = process.env.LOG_LEVEL || "debug";
+        const logLevelName = process.env.LOG_LEVEL || (process.env.PRODUCTION ? "info" : "finer");
         this.logLevel = this.levelToValue(logLevelName);
-        this.oobsLogLevel = this.levelToValue(process.env.OPENOBSERVE_LOGLEVEL || logLevelName);
+        this.oobsLogLevel = this.levelToValue(process.env.OPENOBSERVE_LOGLEVEL || "info");
         this.jobId = jobId;
 
         if (level && this.levelToValue(level) > this.logLevel) {
@@ -151,7 +149,7 @@ export default class Logger {
                 meta: {
                     appName: this.name,
                     appVersion: this.version,
-                    jobId: jobId
+                    jobId: jobId,
                 },
             });
         }
@@ -161,25 +159,30 @@ export default class Logger {
         return LogLevel[level] ? LogLevel[level] : LogLevel.debug;
     }
 
-    log(level:string, ...args) {
+    log(level: string, ...args) {
         let message = "";
         for (const arg of args) {
             if (typeof arg == "object") {
-                message += JSON.stringify(arg, null, 2);
+                message += JSON.stringify(arg, null, 2) + "\n";
             } else {
-                message += arg;
+                message += arg + " ";
             }
         }
+        message = message.trim();
         const levelV = this.levelToValue(level);
         const minLevel = this.logLevel;
         const minObsLevel = this.oobsLogLevel;
         const minNostrLevel = this.levelToValue("info");
         if (levelV >= minLevel) {
             const date = new Date().toISOString();
-            console.log(`${date} [${this.name}:${this.version}] `+(this.jobId?`(${this.jobId})`:"")+`: ${level} : ${message}`);
+            console.log(
+                `${date} [${this.name}:${this.version}] ` +
+                    (this.jobId ? `(${this.jobId})` : "") +
+                    `: ${level} : ${message}`
+            );
         }
         if (this.oobsLogger && levelV >= minObsLevel) {
-            this.oobsLogger.log(level, message);
+            this.oobsLogger.log(level, message, Date.now());
         }
         if (this.runnerLogger && levelV >= minNostrLevel) {
             this.runnerLogger(message);
@@ -215,9 +218,36 @@ export default class Logger {
         this.log("finest", ...args);
     }
 
-    async close():Promise<void> {
+    async close(): Promise<void> {
         if (this.oobsLogger) {
             await this.oobsLogger.close();
         }
+    }
+
+    private static defaultName: string = "main";
+    private static defaultVersion: string = "0.0.0";
+    private static defaultLevel: string = "info";
+    private static defaultEnableOobs: boolean = true;
+    private static loggers: { [key: string]: Logger } = {};
+    static init(name: string, version: string, level?: string, enableOobs: boolean = true): void {
+        Logger.defaultName = name;
+        Logger.defaultVersion = version;
+        Logger.defaultLevel = level || "info";
+        Logger.defaultEnableOobs = enableOobs;
+    }
+
+    static get(name?: string): Logger {
+        name = name || Logger.defaultName;
+        if (!Logger.loggers[name]) {
+            Logger.loggers[name] = new Logger(
+                name,
+                Logger.defaultVersion,
+                undefined,
+                undefined,
+                Logger.defaultLevel,
+                Logger.defaultEnableOobs
+            );
+        }
+        return Logger.loggers[name];
     }
 }
