@@ -39,7 +39,9 @@ class ToolSelector extends JobRunner {
                     "tags": [
                         ["param","run-on", "openagents/tool-selector"],
                         ["output", "{{in.outputType}}"],
-                        ["i", "{{in.query}}", "text", "",  "query"],
+                        {{#in.queries}}
+                        ["i", "{{value}}", "text", "",  "query"],
+                        {{/in.queries}}
                         ["expiration", "{{sys.expiration_timestamp_seconds}}"],
                     ],
                     "content":""
@@ -47,11 +49,21 @@ class ToolSelector extends JobRunner {
                 `,
                 {
                     in: {
-                        query: {
-                            title: "Query",
-                            description: "The user query",
-                            type: "string",
-                            default: "nop",
+                        queries: {
+                            title: "Queries",
+                            description: "The queries",
+                            type: "array",
+                            items: {
+                                type: "map",
+                                properties: {
+                                    value: {
+                                        title: "Value",
+                                        description:"The query value",
+                                        type: "string",
+                                    }
+                                    
+                                },
+                            },
                         },
                         outputType: {
                             title: "Output Type",
@@ -221,18 +233,17 @@ class ToolSelector extends JobRunner {
             this.discoveredActions.tools = tools;
         }
 
-        const newContext = await this.callTools(
-            ctx,
-            this.discoveredActions.actions,
-            this.discoveredActions.tools,
-            [
-                {
-                    role: "user",
-                    content: ctx.getJobInput("query").data
-                },
-            ]
-        );
-
+        let newContext=[];
+        for(const query of ctx.getJobInputs("query")){
+            newContext.push(...
+                (await this.callTools(ctx, this.discoveredActions.actions, this.discoveredActions.tools, [
+                    {
+                        role: "user",
+                        content: query.data,
+                    },
+                ]))
+            );
+        }
         return JSON.stringify(newContext);
     }
 }
