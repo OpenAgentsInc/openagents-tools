@@ -1,10 +1,7 @@
-import JobRunner from "./JobRunner";
-import OpenAgentsNode from "./OpenAgentsNode";
-import RunnerConfig from "./RunnerConfig";
-import NodeConfig from "./NodeConfig";
-import JobContext from "./JobContext";
+import {NodeConfig,RunnerConfig,OpenAgentsNode,JobContext,JobRunner} from "openagents-node-js-sdk";
 import OpenAI from "openai";
 import Mustache from "mustache";
+
 
 class ToolSelector extends JobRunner {
     private discoveredActions = {
