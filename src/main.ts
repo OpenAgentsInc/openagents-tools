@@ -98,6 +98,9 @@ class ToolSelector extends JobRunner {
             };
             for (const key in action.sockets.in) {
                 const socket = action.sockets.in[key];
+                const required=socket.required;
+                delete socket.required ;
+
                 tool.function.parameters.properties[key] = socket;
                 if (typeof socket.default == "undefined") tool.function.parameters.required.push(key);
             }
@@ -154,7 +157,7 @@ class ToolSelector extends JobRunner {
         const event = Mustache.render(template, params);
         logger.finer("Final event", event);
 
-        const jobOut = ctx.waitForContent(ctx.sendSubJobRequest(event));
+        const jobOut = await ctx.waitForContent(ctx.sendSubJobRequest(event));
         logger.finer("Action output", jobOut);
         return jobOut;        
     }
@@ -190,6 +193,7 @@ class ToolSelector extends JobRunner {
                     const args = tool_call.function.arguments;
                     const tool_name = tool_call.function.name;
 
+                    logger.finest("Calling tool", tool_call_id, tool_name, args);
                     const toolOut = await this.callAction(ctx,actions, tool_name, args);
 
                     const toolAnswer: OpenAI.ChatCompletionMessageParam = {
@@ -226,7 +230,7 @@ class ToolSelector extends JobRunner {
             this.discoveredActions.timestamp = Date.now();
             logger.finer("Discovered actions", this.discoveredActions.actions);
             const tools = this.buildTools(this.discoveredActions.actions);
-            logger.finer("Available tools", tools);
+            logger.finer("Available tools", JSON.stringify(tools, null, 2));
             this.discoveredActions.tools = tools;
         }
 
