@@ -80,6 +80,7 @@ class ToolSelector extends JobRunner {
             )
         );
         this.openai = new OpenAI();
+        this.setRunInParallel(true);
     }
 
     private buildTools(actions: Array<{ template: string; meta: any; sockets: any }>) {
