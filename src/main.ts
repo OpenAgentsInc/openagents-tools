@@ -175,7 +175,8 @@ class ToolSelector extends JobRunner {
         tools: any,
         history: Array<OpenAI.ChatCompletionMessageParam>,
         newContext = [],
-        n = 0
+        n = 0, 
+        maxOutChar = 2048
     ) {
         const logger = ctx.getLogger();
         logger.finest("Calling chat completion with history", history);
@@ -201,7 +202,9 @@ class ToolSelector extends JobRunner {
                     const tool_name = tool_call.function.name;
 
                     logger.finest("Calling tool", tool_call_id, tool_name, args);
-                    const toolOut = await this.callAction(ctx,actions, tool_name, args);
+                    let toolOut = await this.callAction(ctx,actions, tool_name, args);
+                    if(maxOutChar)toolOut = toolOut.substring(0, maxOutChar);
+
 
                     const toolAnswer: OpenAI.ChatCompletionMessageParam = {
                         role: "tool",
@@ -210,11 +213,11 @@ class ToolSelector extends JobRunner {
                     };
 
                     logger.finest("Tool answer", toolAnswer);
-                    
+
                     history.push(toolAnswer);
                     newContext.push(toolOut);
                 }
-                if (n < 10) {
+                if (n < 3) {
                     await this.callTools(ctx,actions, tools, history, newContext, n + 1);
                 }
             }
