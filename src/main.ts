@@ -180,7 +180,7 @@ class ToolSelector extends JobRunner {
         const logger = ctx.getLogger();
         logger.finest("Calling chat completion with history", history);
         const chatCompletion = await this.openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
+            model: "gpt-3.5-turbo-16k-0613",
             messages: history,
             temperature: 0,
             tools: tools,
