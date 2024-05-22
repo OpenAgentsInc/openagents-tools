@@ -11,7 +11,6 @@ class ToolSelector extends JobRunner {
     };
 
     private openai: OpenAI;
-    
 
     constructor() {
         super(
@@ -105,8 +104,8 @@ class ToolSelector extends JobRunner {
             };
             for (const key in action.sockets.in) {
                 const socket = action.sockets.in[key];
-                const required=socket.required;
-                delete socket.required ;
+                const required = socket.required;
+                delete socket.required;
 
                 tool.function.parameters.properties[key] = socket;
                 if (typeof socket.default == "undefined") tool.function.parameters.required.push(key);
@@ -122,7 +121,7 @@ class ToolSelector extends JobRunner {
         actionId,
         args: string
     ) {
-        const logger=ctx.getLogger();
+        const logger = ctx.getLogger();
         logger.finest("Calling action", actionId);
         const action = actions.find((a) => a.meta.id == actionId);
         if (!action) throw new Error("Action not found");
@@ -160,13 +159,13 @@ class ToolSelector extends JobRunner {
         Mustache.escape = function (text) {
             return text.replace(/"/g, '\\"');
         };
-        
+
         const event = Mustache.render(template, params);
         logger.finer("Final event", event);
 
         const jobOut = await ctx.waitForContent(ctx.sendSubJobRequest(event));
         logger.finer("Action output", jobOut);
-        return jobOut;        
+        return jobOut;
     }
 
     private async callTools(
@@ -175,8 +174,8 @@ class ToolSelector extends JobRunner {
         tools: any,
         history: Array<OpenAI.ChatCompletionMessageParam>,
         newContext = [],
-        n = 0, 
-        maxOutChar = 2048
+        n = 0,
+        maxTokens = 2048
     ) {
         const logger = ctx.getLogger();
         logger.finest("Calling chat completion with history", history);
@@ -192,7 +191,7 @@ class ToolSelector extends JobRunner {
         const message = chatCompletion.choices[0]?.message;
         if (message) {
             if (message.tool_calls && message.tool_calls.length > 0) {
-                logger.finest("Got tool calls", message.tool_calls)
+                logger.finest("Got tool calls", message.tool_calls);
                 history.push(message);
                 newContext.push(message);
                 for (const tool_call of message.tool_calls) {
@@ -202,9 +201,28 @@ class ToolSelector extends JobRunner {
                     const tool_name = tool_call.function.name;
 
                     logger.finest("Calling tool", tool_call_id, tool_name, args);
-                    let toolOut = await this.callAction(ctx,actions, tool_name, args);
-                    if(maxOutChar)toolOut = toolOut.substring(0, maxOutChar);
+                    let toolOut = await this.callAction(ctx, actions, tool_name, args);
+                    if (maxTokens) {
+                        const encode = (str) => {
+                            let tokens =  str.split(" "); // TODO: use a real tokenizer
+                            tokens = tokens.flatMap((token) => {
+                                // split all words longer than 10 characters
+                                if (token.length > 10) {
+                                    return token.match(/.{1,10}/g);
+                                }
+                                return token;
+                            });
+                            return tokens;
+                        };
 
+                        const decode= (tokens) => {
+                            return tokens.join(" "); // TODO: use a real detokenizer
+                        }
+
+                        let tokens = encode(toolOut);
+                        tokens = tokens.slice(0, maxTokens);
+                        toolOut = decode(tokens);
+                    }
 
                     const toolAnswer: OpenAI.ChatCompletionMessageParam = {
                         role: "tool",
@@ -218,7 +236,7 @@ class ToolSelector extends JobRunner {
                     newContext.push(toolOut);
                 }
                 if (n < 3) {
-                    await this.callTools(ctx,actions, tools, history, newContext, n + 1);
+                    await this.callTools(ctx, actions, tools, history, newContext, n + 1);
                 }
             }
         }
@@ -232,11 +250,11 @@ class ToolSelector extends JobRunner {
                 tags: ["tool"],
                 kindRanges: [{ min: 5000, max: 5999 }],
             });
-            if(actions.length==0){
-                logger.warn("No actions found"); 
+            if (actions.length == 0) {
+                logger.warn("No actions found");
                 return "";
-            } 
-            this.discoveredActions.actions= actions;
+            }
+            this.discoveredActions.actions = actions;
             this.discoveredActions.timestamp = Date.now();
             logger.finer("Discovered actions", this.discoveredActions.actions);
             const tools = this.buildTools(this.discoveredActions.actions);
@@ -244,23 +262,35 @@ class ToolSelector extends JobRunner {
             this.discoveredActions.tools = tools;
         }
 
-        let context:any = ctx.getJobInput("context");
-        if(!context) context="";
-        else context=context.data;
+        const maxTokens = Number(ctx.getJobParamValue("max-tokens", "2048"));
 
-        let results=[];
-        for(const query of ctx.getJobInputs("query")){
-            results.push(...
-                (await this.callTools(ctx, this.discoveredActions.actions, this.discoveredActions.tools, [
-                    {
-                        role: "system",
-                        content: context ? `Answer to user using the following context:\n ${context}` : "Answer to user",
-                    },
-                    {
-                        role: "user",
-                        content: query.data,
-                    },
-                ]))
+        let context: any = ctx.getJobInput("context");
+        if (!context) context = "";
+        else context = context.data;
+
+        let results = [];
+        for (const query of ctx.getJobInputs("query")) {
+            results.push(
+                ...(await this.callTools(
+                    ctx,
+                    this.discoveredActions.actions,
+                    this.discoveredActions.tools,
+                    [
+                        {
+                            role: "system",
+                            content: context
+                                ? `Answer to user using the following context:\n ${context}`
+                                : "Answer to user",
+                        },
+                        {
+                            role: "user",
+                            content: query.data,
+                        },
+                    ],
+                    [],
+                    0,
+                    maxTokens
+                ))
             );
         }
         return JSON.stringify(results);
