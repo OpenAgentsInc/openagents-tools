@@ -241,7 +241,9 @@ class ToolSelector extends JobRunner {
             this.discoveredActions.tools = tools;
         }
 
-        const context = ctx.getJobInput("context")||"";
+        let context:any = ctx.getJobInput("context");
+        if(!context) context="";
+        else context=context.data;
 
         let results=[];
         for(const query of ctx.getJobInputs("query")){
