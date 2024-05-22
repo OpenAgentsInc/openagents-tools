@@ -39,6 +39,7 @@ class ToolSelector extends JobRunner {
                         {{#in.queries}}
                         ["i", "{{value}}", "text", "",  "query"],
                         {{/in.queries}}
+                        ["i", "{{in.context}}", "text", "",  "context"],
                         ["expiration", "{{sys.expiration_timestamp_seconds}}"],
                     ],
                     "content":""
@@ -55,12 +56,17 @@ class ToolSelector extends JobRunner {
                                 properties: {
                                     value: {
                                         title: "Value",
-                                        description:"The query value",
+                                        description: "The query value",
                                         type: "string",
-                                    }
-                                    
+                                    },
                                 },
                             },
+                        },
+                        context: {
+                            title: "Context",
+                            description: "The context",
+                            type: "string",
+                            default: "",
                         },
                         outputType: {
                             title: "Output Type",
@@ -235,10 +241,16 @@ class ToolSelector extends JobRunner {
             this.discoveredActions.tools = tools;
         }
 
-        let newContext=[];
+        const context = ctx.getJobInput("context")||"";
+
+        let results=[];
         for(const query of ctx.getJobInputs("query")){
-            newContext.push(...
+            results.push(...
                 (await this.callTools(ctx, this.discoveredActions.actions, this.discoveredActions.tools, [
+                    {
+                        role: "system",
+                        content: context ? `Answer to user using the following context:\n ${context}` : "Answer to user",
+                    },
                     {
                         role: "user",
                         content: query.data,
@@ -246,7 +258,7 @@ class ToolSelector extends JobRunner {
                 ]))
             );
         }
-        return JSON.stringify(newContext);
+        return JSON.stringify(results);
     }
 }
 
