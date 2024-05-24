@@ -264,6 +264,8 @@ class ToolSelector extends JobRunner {
 
         const maxTokens = Number(ctx.getJobParamValue("max-tokens", "2048"));
 
+        const toolsWhitelist = ctx.getJobParamValues("tools-whitelist")||[];
+
         let context: any = ctx.getJobInput("context");
         if (!context) context = "";
         else context = context.data;
@@ -274,7 +276,13 @@ class ToolSelector extends JobRunner {
                 ...(await this.callTools(
                     ctx,
                     this.discoveredActions.actions,
-                    this.discoveredActions.tools,
+                    this.discoveredActions.tools.filter(tool=>{
+                        if (toolsWhitelist.length > 0 && tool.function) {
+                            return toolsWhitelist.includes(tool.function.name);
+                        }else{
+                            return true;
+                        }
+                    }),
                     [
                         {
                             role: "system",
