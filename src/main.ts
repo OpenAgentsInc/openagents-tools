@@ -119,15 +119,23 @@ class ToolSelector extends JobRunner {
         ctx: JobContext,
         actions: Array<{ template: string; meta: any; sockets: any }>,
         actionId,
-        args: string
+        args: string,
+        toolsTrack = []
     ) {
         const logger = ctx.getLogger();
         logger.finest("Calling action", actionId);
         const action = actions.find((a) => a.meta.id == actionId);
         if (!action) throw new Error("Action not found");
         const template = action.template;
+        const meta = action.meta;
         const sockets = JSON.parse(JSON.stringify(action.sockets));
         const inSockets = JSON.parse(args);
+
+        toolsTrack.push({
+            id: actionId,
+            name: meta.name,
+            description: meta.description,
+        });
 
         const params = {
             sys: {
@@ -175,7 +183,8 @@ class ToolSelector extends JobRunner {
         history: Array<OpenAI.ChatCompletionMessageParam>,
         newContext = [],
         n = 0,
-        maxTokens = 2048
+        maxTokens = 2048,
+        toolsTrack = []
     ) {
         const logger = ctx.getLogger();
         logger.finest("Calling chat completion with history", history);
@@ -201,10 +210,11 @@ class ToolSelector extends JobRunner {
                     const tool_name = tool_call.function.name;
 
                     logger.finest("Calling tool", tool_call_id, tool_name, args);
-                    let toolOut = await this.callAction(ctx, actions, tool_name, args);
+                ;
+                    let toolOut = await this.callAction(ctx, actions, tool_name, args, toolsTrack);
                     if (maxTokens) {
                         const encode = (str) => {
-                            let tokens =  str.split(" "); // TODO: use a real tokenizer
+                            let tokens = str.split(" "); // TODO: use a real tokenizer
                             tokens = tokens.flatMap((token) => {
                                 // split all words longer than 10 characters
                                 if (token.length > 10) {
@@ -215,9 +225,9 @@ class ToolSelector extends JobRunner {
                             return tokens;
                         };
 
-                        const decode= (tokens) => {
+                        const decode = (tokens) => {
                             return tokens.join(" "); // TODO: use a real detokenizer
-                        }
+                        };
 
                         let tokens = encode(toolOut);
                         tokens = tokens.slice(0, maxTokens);
@@ -233,10 +243,10 @@ class ToolSelector extends JobRunner {
                     logger.finest("Tool answer", toolAnswer);
 
                     history.push(toolAnswer);
-                    newContext.push(toolOut);
+                    newContext.push(toolAnswer);
                 }
                 if (n < 3) {
-                    await this.callTools(ctx, actions, tools, history, newContext, n + 1);
+                    await this.callTools(ctx, actions, tools, history, newContext, n + 1, maxTokens, toolsTrack);
                 }
             }
         }
@@ -263,23 +273,25 @@ class ToolSelector extends JobRunner {
         }
 
         const maxTokens = Number(ctx.getJobParamValue("max-tokens", "2048"));
+        const trackToolUsage = ctx.getJobParamValue("track-tool-usage", "false") == "true";
 
-        const toolsWhitelist = ctx.getJobParamValues("tools-whitelist")||[];
+        const toolsWhitelist = ctx.getJobParamValues("tools-whitelist") || [];
 
         let context: any = ctx.getJobInput("context");
         if (!context) context = "";
         else context = context.data;
 
-        let results = [];
+        const results = [];
+        const toolsTrack = [];
         for (const query of ctx.getJobInputs("query")) {
             results.push(
                 ...(await this.callTools(
                     ctx,
                     this.discoveredActions.actions,
-                    this.discoveredActions.tools.filter(tool=>{
+                    this.discoveredActions.tools.filter((tool) => {
                         if (toolsWhitelist.length > 0 && tool.function) {
                             return toolsWhitelist.includes(tool.function.name);
-                        }else{
+                        } else {
                             return true;
                         }
                     }),
@@ -297,11 +309,23 @@ class ToolSelector extends JobRunner {
                     ],
                     [],
                     0,
-                    maxTokens
+                    maxTokens,
+                    toolsTrack
                 ))
             );
         }
-        return JSON.stringify(results);
+
+        if(trackToolUsage){
+            results.push({
+                role: "assistant",
+                content: JSON.stringify({sources:toolsTrack}),
+                sources: toolsTrack,
+            });
+        }
+
+        const stringifiedResults = JSON.stringify(results, null, 2);
+        console.log(stringifiedResults);
+        return stringifiedResults;
     }
 }
 
