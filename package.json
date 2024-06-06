@@ -33,7 +33,7 @@
         "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
         "esbuild": "^0.20.2",
         "ts-node": "^10.9.2",
-        "tsc-alias": "^1.8.8",
+        "tsc-alias": "^1.8.10",
         "typescript": "^5.4.3"
     }
 }
