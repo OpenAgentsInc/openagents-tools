@@ -277,6 +277,15 @@ class ToolSelector extends JobRunner {
 
         const toolsWhitelist = ctx.getJobParamValues("tools-whitelist") || [];
 
+        const selectableTools = this.discoveredActions.tools.filter((tool) => {
+            if (toolsWhitelist.length > 0 && tool.function) {
+                return toolsWhitelist.includes(tool.function.name);
+            } else {
+                return true;
+            }
+        });
+        logger.finer("Selectable tools", JSON.stringify(selectableTools, null, 2),"filtering by",toolsWhitelist);
+
         let context: any = ctx.getJobInput("context");
         if (!context) context = "";
         else context = context.data;
@@ -288,13 +297,7 @@ class ToolSelector extends JobRunner {
                 ...(await this.callTools(
                     ctx,
                     this.discoveredActions.actions,
-                    this.discoveredActions.tools.filter((tool) => {
-                        if (toolsWhitelist.length > 0 && tool.function) {
-                            return toolsWhitelist.includes(tool.function.name);
-                        } else {
-                            return true;
-                        }
-                    }),
+                    selectableTools,
                     [
                         {
                             role: "system",
