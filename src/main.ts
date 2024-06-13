@@ -184,6 +184,7 @@ class ToolSelector extends JobRunner {
         newContext = [],
         n = 0,
         maxTokens = 2048,
+        maxCalls=3,
         toolsTrack = []
     ) {
         const logger = ctx.getLogger();
@@ -245,8 +246,8 @@ class ToolSelector extends JobRunner {
                     history.push(toolAnswer);
                     newContext.push(toolAnswer);
                 }
-                if (n < 3) {
-                    await this.callTools(ctx, actions, tools, history, newContext, n + 1, maxTokens, toolsTrack);
+                if (n < maxCalls) {
+                    await this.callTools(ctx, actions, tools, history, newContext, n + 1, maxTokens, maxCalls, toolsTrack);
                 }
             }
         }
@@ -276,6 +277,11 @@ class ToolSelector extends JobRunner {
         const trackToolUsage = ctx.getJobParamValue("track-tool-usage", "false") == "true";
 
         const toolsWhitelist = ctx.getJobParamValues("tools-whitelist") || [];
+        
+        const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+        const maxCalls = clamp(Number(ctx.getJobParamValue("max-tool-calls", "3")), 0, 6);
+        
+
 
         const selectableTools = this.discoveredActions.tools.filter((tool) => {
             if (toolsWhitelist.length > 0 && tool.function) {
@@ -313,6 +319,7 @@ class ToolSelector extends JobRunner {
                     [],
                     0,
                     maxTokens,
+                    maxCalls,
                     toolsTrack
                 ))
             );
